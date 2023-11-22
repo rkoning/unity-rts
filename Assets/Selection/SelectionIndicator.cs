@@ -8,7 +8,7 @@ namespace rkoning.RTS {
     {
         private Selectable selectable;
 
-        public readonly GameObject indicator;
+        public GameObject indicator;
 
         public void OnEnable() {
             selectable = GetComponent<Selectable>();

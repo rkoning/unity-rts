@@ -22,6 +22,10 @@ namespace rkoning.RTS {
         private bool selectHeld;
         private bool selectUp;
 
+        private bool commandDown;
+        private bool commandHeld;
+        private bool commandUp;
+
         private Vector2 dragStart;
         private bool isDragging;
         public delegate void DragEvent(Vector2 screenPosition);
@@ -45,9 +49,47 @@ namespace rkoning.RTS {
 
         private void Update() {
             CaptureInputs();
+            HandleSelectionInput();
+            HandleCommandInput();
+        }
+
+        private void CaptureInputs() {
+            selectDown = Input.GetMouseButtonDown(0);
+            selectHeld = Input.GetMouseButton(0);
+            selectUp = Input.GetMouseButtonUp(0);
+
+            commandDown = Input.GetMouseButtonDown(1);
+            commandHeld = Input.GetMouseButton(1);
+            commandUp = Input.GetMouseButtonUp(1);
+
+            shiftHeld = Input.GetKey(KeyCode.LeftShift);
+            ctrlHeld = Input.GetKey(KeyCode.LeftControl);
+        }
+
+#region Commands
+        private void HandleCommandInput() {
+            if (commandDown) {
+                Debug.Log("CommandDown");
+                if (TryGetWorldPointAtScreenPosition(Input.mousePosition, out var point)) {
+                    Debug.Log("point");
+                    var command = new MoveCommand(point);
+                    foreach (var selectable in selected) {
+                        if (shiftHeld) {
+                            selectable.GetComponent<Commandable>().QueueCommand(command);
+                        } else {
+                            selectable.GetComponent<Commandable>().SendCommand(command);
+                        }
+                    }
+                }
+            }
+        }
+#endregion
+
+#region Selection
+        private void HandleSelectionInput() {
             if (selectDown) {
                 if (TryGetSelectableAtMousePosition(out var s))
-                    OnSelectIndividual(s);
+                    SelectIndividual(s);
                 else
                     ClearSelection();
             } else if (selectHeld) {
@@ -73,8 +115,28 @@ namespace rkoning.RTS {
                     );
                 
                 if (TryGetSelectablesInScreenRegion(dragStart, Input.mousePosition, out var inRegion)) {
-                    SelectOnly(inRegion);
+                    SelectMultiple(inRegion);
                 }
+            }
+        }
+
+        private void SelectIndividual(Selectable selectable) {
+            if (shiftHeld) {
+                AddToSelection(selectable);
+            } else if (ctrlHeld) {
+                RemoveFromSelection(selectable);
+            } else {
+                SelectOnly(selectable);
+            }
+        }
+
+        private void SelectMultiple(List<Selectable> selectables) {
+            if (shiftHeld) {
+                AddToSelection(selectables);
+            } else if (ctrlHeld) {
+                RemoveFromSelection(selectables);
+            } else {
+                SelectOnly(selectables);
             }
         }
 
@@ -96,29 +158,9 @@ namespace rkoning.RTS {
             return inRegion.Count > 0;
         }
 
-        private void OnSelectIndividual(Selectable selectable) {
-            if (shiftHeld) {
-                AddToSelection(selectable);
-            } else if (ctrlHeld) {
-                RemoveFromSelection(selectable);
-            } else {
-                SelectOnly(selectable);
-            }
-
-        }
-
-        private void CaptureInputs() {
-            selectDown = Input.GetMouseButtonDown(0);
-            selectHeld = Input.GetMouseButton(0);
-            selectUp = Input.GetMouseButtonUp(0);
-
-            shiftHeld = Input.GetKey(KeyCode.LeftShift);
-            ctrlHeld = Input.GetKey(KeyCode.LeftControl);
-        }
-
         bool TryGetWorldPointAtScreenPosition(Vector2 screenPosition, out Vector3 worldPosition) {
             Ray ray = mainCamera.ScreenPointToRay(screenPosition);
-            if (Physics.Raycast(ray, out var hit, Mathf.Infinity, selectableMask)) {
+            if (Physics.Raycast(ray, out var hit, Mathf.Infinity)) {
                 worldPosition = hit.point;
                 return true;
             }
@@ -128,7 +170,7 @@ namespace rkoning.RTS {
 
         bool TryGetSelectableAtMousePosition(out Selectable selectable) {
             Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out var hit, Mathf.Infinity, selectableMask) 
+            if (Physics.Raycast(ray, out var hit, Mathf.Infinity) 
                 && hit.collider.TryGetComponent(out selectable))
                     return true;
             selectable = null;
@@ -192,5 +234,15 @@ namespace rkoning.RTS {
                 selected.Remove(s);
             }
         }
+
+        /// <summary>
+        /// Removes a Selectable from the selection if it is currently in it, does not clear existing selection
+        /// </summary>
+        /// <param name="s">Selectable to remove</param>
+        public void RemoveFromSelection(List<Selectable> selectables) {
+            foreach (var s in selectables)
+                RemoveFromSelection(s);
+        }
+#endregion
     }
 }
